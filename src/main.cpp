@@ -1,24 +1,9 @@
 #include <Arduino.h>
 #include "usbh_core.h"
 
-const uint8_t LED_PIN = 21;
-
-enum class LedBlinkInterval {
-    DISCONNECTED = 100,
-    CONNECTED = 1000,
-};
-
-volatile uint16_t led_delay_ms = static_cast<uint16_t>(LedBlinkInterval::DISCONNECTED);
-TaskHandle_t led_blink_task_handle;
-
-void led_blink_task(void*) {
-    bool state = false;
-    while (true) {
-        digitalWrite(LED_PIN, state);
-        state = !state;
-        vTaskDelay(led_delay_ms);
-    }
-}
+extern const uint8_t LED_PIN;
+extern TaskHandle_t led_blink_task_handle;
+void led_blink_task(void*);
 
 void setup() {
     // indicator LED task initialize.
