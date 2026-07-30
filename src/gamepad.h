@@ -1,8 +1,8 @@
 #pragma once
 
-#include "usbh_core.h"
+#include "driver/general.h"
 
-extern TaskHandle_t gamepad_poll_task_handle;
+#define CONFIG_PRINT_RAW_REPORT_DATA 0
 
-void gamepad_poll_task(void*);
-void gamepad_poll_task_init();
+struct Gamepad* gamepad_poll();
+void print_gamepad_state(struct Gamepad *gamepad);
