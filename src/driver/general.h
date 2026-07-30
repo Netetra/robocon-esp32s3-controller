@@ -3,9 +3,11 @@
 #include "usbh_core.h"
 
 #define CONFIG_GAMEPAD_MAX 1
+#define BUFFER_SIZE 1024
 
 enum class GamepadType {
-    Xbox
+    Xbox,
+    PS4
 };
 
 struct usbh_gamepad {
@@ -17,6 +19,9 @@ struct usbh_gamepad {
     uint8_t intf;
     uint8_t minor;
     enum GamepadType gamepad_type;
+    bool is_connected;
+    bool is_active;
+    uint8_t *buffer;
 };
 
 struct usbh_gamepad* usbh_gamepad_alloc(void);

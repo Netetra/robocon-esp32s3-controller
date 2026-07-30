@@ -1,17 +1,16 @@
 #include <Arduino.h>
 #include "usbh_core.h"
+#include "led_blink.h"
+#include "gamepad.h"
 
-extern const uint8_t LED_PIN;
-extern TaskHandle_t led_blink_task_handle;
-void led_blink_task(void*);
+const uint8_t LED_PIN = 21;
 
 void setup() {
-    // indicator LED task initialize.
-    pinMode(LED_PIN, OUTPUT);
-    xTaskCreateUniversal(led_blink_task, "LED Blink", 2048, NULL, 0, &led_blink_task_handle, CONFIG_ARDUINO_RUNNING_CORE);
-    // CherryUSB Host stack initialize.
+    led_blink_task_init(&LED_PIN); // indicator LED task initialize.
+    gamepad_poll_task_init(); // gamepad poll task initialize.
+
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    usbh_initialize(0, ESP_USBH_BASE);
+    usbh_initialize(0, ESP_USBH_BASE); // CherryUSB Host stack initialize.
 }
 
 void loop() {

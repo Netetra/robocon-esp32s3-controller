@@ -44,7 +44,7 @@ static int usbh_xbox_connect(struct usbh_hubport *hport, uint8_t intf) {
         }
     }
     snprintf(hport->config.intf[intf].devname, CONFIG_USBHOST_DEV_NAMELEN, DEV_FORMAT, xbox_class->minor);
-    USB_LOG_INFO("Register XBOX Class:%s\r\n", hport->config.intf[intf].devname);
+    USB_LOG_INFO("Register Xbox Class:%s\r\n", hport->config.intf[intf].devname);
     xbox_class->gamepad_type = GamepadType::Xbox;
     usbh_gamepad_run(xbox_class);
     return 0;
@@ -57,7 +57,7 @@ static int usbh_xbox_disconnect(struct usbh_hubport *hport, uint8_t intf) {
         if (xbox_class->ep_out) { usbh_kill_urb(&xbox_class->ep_out_urb); }
         if (hport->config.intf[intf].devname[0] != '\0') {
             // usb_osal_thread_schedule_other();
-            USB_LOG_INFO("Unregister XBOX Class:%s\r\n", hport->config.intf[intf].devname);
+            USB_LOG_INFO("Unregister Xbox Class:%s\r\n", hport->config.intf[intf].devname);
             usbh_gamepad_stop(xbox_class);
         }
         usbh_gamepad_free(xbox_class);
