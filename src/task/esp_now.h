@@ -7,9 +7,15 @@ struct PeerState {
     uint32_t last_receive_beacon;
 };
 
-struct RecvData {
-    const esp_now_recv_info_t *esp_now_info;
-    const uint8_t *receiveData;
+struct SendParams {
+    uint8_t peer_addr[ESP_NOW_ETH_ALEN];
+    uint8_t data[ESP_NOW_MAX_DATA_LEN];
+    size_t len;
+};
+
+struct ReceiveParams {
+    esp_now_recv_info_t esp_now_info;
+    uint8_t receiveData[ESP_NOW_MAX_DATA_LEN];
     int data_len;
 };
 
