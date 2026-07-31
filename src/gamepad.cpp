@@ -10,7 +10,7 @@
 extern volatile uint16_t led_blink_interval;
 extern uint32_t g_devinuse;
 extern struct usbh_gamepad g_gamepad_class[CONFIG_GAMEPAD_MAX];
-struct Gamepad gamepad;
+struct GamepadData gamepad;
 
 void usbh_gamepad_callback(void *arg, int nbytes) {
     struct usbh_gamepad *gamepad_class = (struct usbh_gamepad*)arg;
@@ -28,7 +28,7 @@ void usbh_gamepad_callback(void *arg, int nbytes) {
     gamepad_class->nbytes = nbytes;
 }
 
-struct Gamepad* gamepad_poll() {
+struct GamepadData* gamepad_poll() {
     for (uint8_t i = 0; i < CONFIG_GAMEPAD_MAX; i++) {
         struct usbh_gamepad* gamepad_class = &(g_gamepad_class[i]);
         uint8_t devno = gamepad_class->minor;
@@ -105,42 +105,159 @@ void cherryusb_task_init() {
     usbh_initialize(0, ESP_USBH_BASE);
 }
 
-void print_gamepad_state(struct Gamepad *gamepad) {
+void print_gamepad_state(struct GamepadData *gamepad_data) {
     printf(
         "\033[2K LStick: x = %4d y = %4d, RStick: x = %4d y = %4d\r\n",
-        gamepad->joystick_left.x,
-        gamepad->joystick_left.y,
-        gamepad->joystick_right.x,
-        gamepad->joystick_right.y
+        gamepad_data->joystick_left.x,
+        gamepad_data->joystick_left.y,
+        gamepad_data->joystick_right.x,
+        gamepad_data->joystick_right.y
     );
-    printf("\033[2K LTrigger: %3d, RTrigger: %3d\r\n", gamepad->trigger_left, gamepad->trigger_right);
+    printf("\033[2K LTrigger: %3d, RTrigger: %3d\r\n", gamepad_data->trigger_left, gamepad_data->trigger_right);
     printf(
         "\033[2K Start: %d, Select: %d, LStick: %d, RStick: %d\r\n",
-        gamepad->buttons.bits.start,
-        gamepad->buttons.bits.select,
-        gamepad->buttons.bits.joystick_left,
-        gamepad->buttons.bits.joystick_right
+        gamepad_data->buttons.bits.start,
+        gamepad_data->buttons.bits.select,
+        gamepad_data->buttons.bits.joystick_left,
+        gamepad_data->buttons.bits.joystick_right
     );
     printf(
         "\033[2K north: %d, east: %d, south: %d, west: %d\r\n",
-        gamepad->buttons.bits.north,
-        gamepad->buttons.bits.east,
-        gamepad->buttons.bits.south,
-        gamepad->buttons.bits.west
+        gamepad_data->buttons.bits.north,
+        gamepad_data->buttons.bits.east,
+        gamepad_data->buttons.bits.south,
+        gamepad_data->buttons.bits.west
     );
     printf(
         "\033[2K Left shoulder: %d trigger: %d, Right shouler: %d, trigger: %d\r\n",
-        gamepad->buttons.bits.shoulder_left,
-        gamepad->buttons.bits.trigger_left,
-        gamepad->buttons.bits.shoulder_right,
-        gamepad->buttons.bits.trigger_right
+        gamepad_data->buttons.bits.shoulder_left,
+        gamepad_data->buttons.bits.trigger_left,
+        gamepad_data->buttons.bits.shoulder_right,
+        gamepad_data->buttons.bits.trigger_right
     );
     printf(
         "\033[2K Dpad up: %d, down: %d, left: %d, right: %d\r\n",
-        gamepad->dpad == Dpad::LeftUp || gamepad->dpad == Dpad::Up || gamepad->dpad == Dpad::RightUp,
-        gamepad->dpad == Dpad::LeftDown || gamepad->dpad == Dpad::Down || gamepad->dpad == Dpad::RightDown,
-        gamepad->dpad == Dpad::LeftUp || gamepad->dpad == Dpad::Left || gamepad->dpad == Dpad::LeftDown,
-        gamepad->dpad == Dpad::RightUp || gamepad->dpad == Dpad::Right || gamepad->dpad == Dpad::RightDown
+        gamepad_data->dpad == Dpad::LeftUp || gamepad_data->dpad == Dpad::Up || gamepad_data->dpad == Dpad::RightUp,
+        gamepad_data->dpad == Dpad::LeftDown || gamepad_data->dpad == Dpad::Down || gamepad_data->dpad == Dpad::RightDown,
+        gamepad_data->dpad == Dpad::LeftUp || gamepad_data->dpad == Dpad::Left || gamepad_data->dpad == Dpad::LeftDown,
+        gamepad_data->dpad == Dpad::RightUp || gamepad_data->dpad == Dpad::Right || gamepad_data->dpad == Dpad::RightDown
     );
     printf("\r\033[6A");
+}
+
+Gamepad::Gamepad() {
+    struct GamepadData init_gamepad = {
+        .joystick_left = { 0, 0 },
+        .joystick_right = { 0, 0 },
+        .trigger_left = 0,
+        .trigger_right = 0,
+        .buttons = { .raw = 0 },
+        .dpad = Dpad::Neutral
+    };
+    memcpy(&this->current_data, &init_gamepad, sizeof(struct GamepadData));
+}
+
+void Gamepad::update(struct GamepadData *gamepad_data) {
+    if (gamepad_data == NULL) { return; }
+    memcpy(&this->current_data, gamepad_data, sizeof(struct GamepadData));
+}
+
+int8_t Gamepad::joystick_left_x() {
+    return this->current_data.joystick_left.x;
+}
+
+int8_t Gamepad::joystick_left_y() {
+    return this->current_data.joystick_left.y;
+}
+
+int8_t Gamepad::joystick_right_x() {
+    return this->current_data.joystick_right.x;
+}
+
+int8_t Gamepad::joystick_right_y() {
+    return this->current_data.joystick_right.y;
+}
+
+uint8_t Gamepad::trigger_left_value() {
+    return this->current_data.trigger_left;
+}
+
+uint8_t Gamepad::trigger_left_value() {
+    return this->current_data.trigger_right;
+}
+
+bool Gamepad::north() {
+    return this->current_data.buttons.bits.north == 1;
+}
+
+bool Gamepad::east() {
+    return this->current_data.buttons.bits.east == 1;
+}
+
+bool Gamepad::south() {
+    return this->current_data.buttons.bits.south == 1;
+}
+
+bool Gamepad::west() {
+    return this->current_data.buttons.bits.west == 1;
+}
+
+bool Gamepad::up() {
+    return
+        this->current_data.dpad == Dpad::LeftUp ||
+        this->current_data.dpad == Dpad::Up ||
+        this->current_data.dpad == Dpad::RightUp;
+}
+
+bool Gamepad::right() {
+    return
+        this->current_data.dpad == Dpad::RightUp ||
+        this->current_data.dpad == Dpad::Right ||
+        this->current_data.dpad == Dpad::RightDown;
+}
+
+bool Gamepad::down() {
+    return
+        this->current_data.dpad == Dpad::LeftDown ||
+        this->current_data.dpad == Dpad::Down ||
+        this->current_data.dpad == Dpad::RightDown;
+}
+
+bool Gamepad::left() {
+    return
+        this->current_data.dpad == Dpad::LeftUp ||
+        this->current_data.dpad == Dpad::Left ||
+        this->current_data.dpad == Dpad::LeftDown;
+}
+
+bool Gamepad::start() {
+    return this->current_data.buttons.bits.start == 1;
+}
+
+bool Gamepad::select() {
+    return this->current_data.buttons.bits.select == 1;
+}
+
+bool Gamepad::joystick_left() {
+    return this->current_data.buttons.bits.joystick_left == 1;
+}
+
+bool Gamepad::joystick_right() {
+    return this->current_data.buttons.bits.joystick_right == 1;
+}
+
+bool Gamepad::shoulder_left() {
+    return this->current_data.buttons.bits.shoulder_left == 1;
+}
+
+bool Gamepad::shoulder_right() {
+    return this->current_data.buttons.bits.shoulder_right == 1;
+}
+
+bool Gamepad::trigger_left() {
+    return this->current_data.buttons.bits.trigger_left == 1;
+}
+
+bool Gamepad::trigger_right() {
+    return this->current_data.buttons.bits.trigger_right == 1;
 }

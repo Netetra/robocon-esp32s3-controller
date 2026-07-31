@@ -6,15 +6,16 @@
 
 const uint8_t LED_PIN = 21;
 
+Gamepad gamepad = Gamepad();
+
 void setup() {
-    // cherryusb_task_init();
+    cherryusb_task_init();
     esp_now_task_init();
     led_blink_task_init(&LED_PIN);
 }
 
 void loop() {
+    struct GamepadData *gamepad_data = gamepad_poll();
+    gamepad.update(gamepad_data);
     vTaskDelay(10);
-    // struct Gamepad *gamepad = gamepad_poll();
-    // if (gamepad == NULL) { return; }
-    // print_gamepad_state(gamepad);
 }

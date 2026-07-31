@@ -74,7 +74,7 @@ int8_t fix_joystick_range(uint8_t value) {
     return tmp - 128;
 }
 
-void ps4_report_parser(uint8_t *buffer, struct Gamepad* gamepad) {
+void ps4_report_parser(uint8_t *buffer, struct GamepadData* gamepad) {
     gamepad->joystick_left.x = fix_joystick_range(buffer[1]);
     gamepad->joystick_left.y = fix_joystick_range(buffer[2]);
     gamepad->joystick_right.x =fix_joystick_range(buffer[3]);
