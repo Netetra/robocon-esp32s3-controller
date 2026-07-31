@@ -53,9 +53,7 @@ struct Gamepad* gamepad_poll() {
         gamepad_class->is_active = true;
         while (gamepad_class->is_active) { vTaskDelay(1); }
 
-        if (!gamepad_class->is_receive) {
-            continue;
-        }
+        if (!gamepad_class->is_receive) { continue; }
 
         #if CONFIG_PRINT_RAW_REPORT_DATA
         for (int i = 0; i < gamepad_class->nbytes; i++) {

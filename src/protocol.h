@@ -5,9 +5,7 @@
 const uint16_t BEACON_INTERVAL = 500; // milli second.
 const uint16_t BEACON_DEADLINE = 50;
 
-const uint8_t BROADCAST_MAC[6] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-};
+const uint8_t BROADCAST_MAC[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 const uint8_t SOF = 0x55;
 

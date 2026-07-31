@@ -23,13 +23,12 @@ void led_blink_task(void* args) {
 
 void led_blink_task_init(const uint8_t* led_pin) {
     pinMode(*led_pin, OUTPUT);
-    xTaskCreateUniversal(
+    xTaskCreate(
         led_blink_task,
         TAG,
         STACK_SIZE,
         (void*)led_pin,
         PRIORITY,
-        &led_blink_task_handle,
-        CONFIG_ARDUINO_RUNNING_CORE
+        &led_blink_task_handle
     );
 }
