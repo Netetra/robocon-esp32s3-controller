@@ -1,6 +1,8 @@
-#include "freertos/FreeRTOS.h"
+#include <freertos/FreeRTOS.h>
 #include <Arduino.h>
 #include "led_blink.h"
+
+#define TAG "LED Blink"
 
 const uint32_t STACK_SIZE = 2048;
 const uint8_t PRIORITY = 0;
@@ -11,6 +13,7 @@ TaskHandle_t led_blink_task_handle;
 void led_blink_task(void* args) {
     uint8_t led_pin = *(uint8_t*)args;
     bool state = false;
+    ESP_LOGI(TAG, "LED Blink task initialized.");
     while (true) {
         digitalWrite(led_pin, state);
         state = !state;
@@ -22,7 +25,7 @@ void led_blink_task_init(const uint8_t* led_pin) {
     pinMode(*led_pin, OUTPUT);
     xTaskCreateUniversal(
         led_blink_task,
-        "LED Blink",
+        TAG,
         STACK_SIZE,
         (void*)led_pin,
         PRIORITY,

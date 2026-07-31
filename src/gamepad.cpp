@@ -5,6 +5,8 @@
 #include "driver/ps4.h"
 #include "gamepad.h"
 
+#define TAG "Gamepad"
+
 extern volatile uint16_t led_blink_interval;
 extern uint32_t g_devinuse;
 extern struct usbh_gamepad g_gamepad_class[CONFIG_GAMEPAD_MAX];
@@ -81,7 +83,7 @@ extern "C" void usbh_gamepad_run(struct usbh_gamepad *gamepad_class) {
         MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL
     );
     if (gamepad_class->buffer == NULL) {
-        USB_LOG_ERR("malloc failed");
+        ESP_LOGE(TAG, "malloc failed");
         return;
     }
 
@@ -98,6 +100,11 @@ extern "C" void usbh_gamepad_stop(struct usbh_gamepad *gamepad_class) {
     gamepad_class->is_connected = false;
     heap_caps_free(gamepad_class->buffer);
     led_blink_interval = static_cast<uint16_t>(LedBlinkInterval::DISCONNECTED);
+}
+
+void cherryusb_task_init() {
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    usbh_initialize(0, ESP_USBH_BASE);
 }
 
 void print_gamepad_state(struct Gamepad *gamepad) {
