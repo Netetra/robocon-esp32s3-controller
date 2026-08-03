@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_now.h>
+#include "../protocol.h"
 
 struct PairingTaskParam {
     uint8_t peer_id;
@@ -19,7 +20,8 @@ struct SendParams {
 };
 
 struct ReceiveParams {
-    esp_now_recv_info_t esp_now_info;
+    mac_addr_t src_addr;
+    mac_addr_t des_addr;
     uint8_t receiveData[ESP_NOW_MAX_DATA_LEN];
     int data_len;
 };

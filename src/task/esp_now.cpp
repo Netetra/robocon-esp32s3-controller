@@ -54,45 +54,46 @@ void pairing_task(void* args) {
     while (true) {
         struct ReceiveParams receive_params = { 0 };
         if (xQueueReceive(pairing_queue, &receive_params, portMAX_DELAY)) {
-            esp_now_recv_info_t *esp_now_info = &receive_params.esp_now_info;
+            mac_addr_t *src_addr = &receive_params.src_addr;
+            mac_addr_t *des_addr = &receive_params.des_addr;
             int data_len = receive_params.data_len;
             std::vector<uint8_t> frame(
                 (uint8_t*)receive_params.receiveData,
                 (uint8_t*)receive_params.receiveData + data_len
             );
-            mac_addr_t remote_mac_addr;
-            std::copy(esp_now_info->src_addr, esp_now_info->src_addr + sizeof(mac_addr_t), remote_mac_addr.begin());
+            // mac_addr_t remote_mac_addr;
+            // std::copy(src_addr, src_addr + sizeof(mac_addr_t), remote_mac_addr.begin());
             uint8_t remote_peer_id;
 
             if (Frame::is_beacon(frame)) {
                 esp_now_peer_info_t peer;
-                esp_err_t result = esp_now_get_peer(esp_now_info->src_addr, &peer);
+                esp_err_t result = esp_now_get_peer(src_addr->data(), &peer);
                 if (result == ESP_OK) {
                     ((struct PeerState*)peer.priv)->last_receive_beacon = millis();
                     continue;
                 } else if (result == ESP_ERR_ESPNOW_NOT_FOUND) {
-                    std::vector<uint8_t> pairing_request = Frame::pairing_request(remote_mac_addr);
+                    std::vector<uint8_t> pairing_request = Frame::pairing_request(*src_addr);
                     esp_now_send_wrap(BROADCAST_MAC.data(), pairing_request.data(), pairing_request.size());
-                    ESP_LOGI(TAG, "Pairing requested. address: " MACSTR, MAC2STR(esp_now_info->src_addr));
+                    ESP_LOGI(TAG, "Pairing requested. address: " MACSTR, MAC2STR(src_addr->data()));
                 } else {
                     ESP_LOGE(TAG, "Unknown error. result = %d", result);
                 }
             } else if (Frame::is_pairing_request(frame, mac_addr)) {
-                std::vector<uint8_t> pairing_accept = Frame::pairing_accept(remote_mac_addr, peer_id);
+                std::vector<uint8_t> pairing_accept = Frame::pairing_accept(*src_addr, peer_id);
                 esp_now_send_wrap(BROADCAST_MAC.data(), pairing_accept.data(), pairing_accept.size());
             } else if (Frame::is_pairing_accept(frame, mac_addr, &remote_peer_id)) {
                 if (peer_id == remote_peer_id) {
-                    ESP_LOGE(TAG, "Duplicate ID detected. id: 0x%02X, address: " MACSTR, peer_id, MAC2STR(esp_now_info->src_addr));
+                    ESP_LOGE(TAG, "Duplicate ID detected. id: 0x%02X, address: " MACSTR, peer_id, MAC2STR(src_addr->data()));
                     continue;
                 }
                 esp_now_peer_info_t peer;
-                esp_err_t result = esp_now_get_peer(esp_now_info->src_addr, &peer);
+                esp_err_t result = esp_now_get_peer(src_addr->data(), &peer);
                 if (result == ESP_OK) { continue; }
                 if (result != ESP_ERR_ESPNOW_NOT_FOUND) {
                     ESP_LOGE(TAG, "Unknown error. result = %d", result);
                     continue;
                 }
-                memcpy(peer.peer_addr, esp_now_info->src_addr, ESP_NOW_ETH_ALEN);
+                memcpy(peer.peer_addr, src_addr->data(), ESP_NOW_ETH_ALEN);
                 peer.ifidx = WIFI_IF_STA;
                 peer.channel = 0;
                 peer.encrypt = false;
@@ -118,7 +119,16 @@ void pairing_task(void* args) {
 
 void esp_now_recv_cb(const esp_now_recv_info_t *esp_now_info, const uint8_t *receiveData, int data_len) {
     struct ReceiveParams receive_params = { 0 };
-    memcpy(&receive_params.esp_now_info, esp_now_info, sizeof(esp_now_recv_info_t));
+    std::copy(
+        esp_now_info->src_addr,
+        esp_now_info->src_addr + sizeof(mac_addr_t),
+        receive_params.src_addr.begin()
+    );
+    std::copy(
+        esp_now_info->des_addr,
+        esp_now_info->des_addr + sizeof(mac_addr_t),
+        receive_params.des_addr.begin()
+    );
     memcpy(receive_params.receiveData, receiveData, data_len);
     receive_params.data_len = data_len;
     xQueueSend(receiver_queue, &receive_params, portMAX_DELAY);
@@ -147,7 +157,7 @@ void esp_now_receive_task(void* args) {
     ESP_LOGI(TAG, "Receive task initialized.");
     while (true) {
         if (xQueueReceive(receiver_queue, &receive_params, portMAX_DELAY)) {
-            if (memcmp(receive_params.esp_now_info.des_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) {
+            if (memcmp(receive_params.des_addr.data(), BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) {
                 xQueueSend(pairing_queue, &receive_params, portMAX_DELAY);
             }
         }
