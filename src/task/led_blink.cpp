@@ -21,13 +21,13 @@ void led_blink_task(void* args) {
     }
 }
 
-void led_blink_task_init(const uint8_t* led_pin) {
-    pinMode(*led_pin, OUTPUT);
+void led_blink_task_init(uint8_t led_pin) {
+    pinMode(led_pin, OUTPUT);
     xTaskCreate(
         led_blink_task,
         TAG,
         STACK_SIZE,
-        (void*)led_pin,
+        (void*)&led_pin,
         PRIORITY,
         &led_blink_task_handle
     );

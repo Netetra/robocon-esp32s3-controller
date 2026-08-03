@@ -10,7 +10,7 @@
 extern volatile uint16_t led_blink_interval;
 extern uint32_t g_devinuse;
 extern struct usbh_gamepad g_gamepad_class[CONFIG_GAMEPAD_MAX];
-struct GamepadData gamepad;
+struct GamepadData gamepad_data;
 
 void usbh_gamepad_callback(void *arg, int nbytes) {
     struct usbh_gamepad *gamepad_class = (struct usbh_gamepad*)arg;
@@ -64,12 +64,12 @@ struct GamepadData* gamepad_poll() {
 
         switch (gamepad_class->gamepad_type) {
             case GamepadType::PS4:
-                ps4_report_parser(gamepad_class->buffer, &gamepad);
+                ps4_report_parser(gamepad_class->buffer, &gamepad_data);
                 break;
             default:
                 continue;
         }
-        return &gamepad;
+        return &gamepad_data;
     }
     return NULL;
 }
@@ -182,7 +182,7 @@ uint8_t Gamepad::trigger_left_value() {
     return this->current_data.trigger_left;
 }
 
-uint8_t Gamepad::trigger_left_value() {
+uint8_t Gamepad::trigger_right_value() {
     return this->current_data.trigger_right;
 }
 

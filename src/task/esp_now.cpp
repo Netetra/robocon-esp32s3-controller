@@ -4,6 +4,7 @@
 #include <esp_wifi.h>
 #include <esp_now.h>
 #include <esp_timer.h>
+#include <esp_mac.h>
 #include "./esp_now.h"
 #include "../protocol.h"
 
@@ -45,37 +46,44 @@ void esp_now_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t s
 }
 
 void pairing_task(void* args) {
-    struct ReceiveParams receive_params = { 0 };
+    uint8_t peer_id = ((struct PairingTaskParam*)args)->peer_id;
+    mac_addr_t mac_addr;
+    esp_read_mac(mac_addr.data(), ESP_MAC_WIFI_STA);
+
     ESP_LOGI(TAG, "Pairing task initialized.");
     while (true) {
+        struct ReceiveParams receive_params = { 0 };
         if (xQueueReceive(pairing_queue, &receive_params, portMAX_DELAY)) {
             esp_now_recv_info_t *esp_now_info = &receive_params.esp_now_info;
-            uint8_t *receiveData = receive_params.receiveData;
             int data_len = receive_params.data_len;
-            if (data_len == sizeof(BEACON_FRAME) && memcmp(BEACON_FRAME, receiveData, sizeof(BEACON_FRAME)) == 0) {
+            std::vector<uint8_t> frame(
+                (uint8_t*)receive_params.receiveData,
+                (uint8_t*)receive_params.receiveData + data_len
+            );
+            mac_addr_t remote_mac_addr;
+            std::copy(esp_now_info->src_addr, esp_now_info->src_addr + sizeof(mac_addr_t), remote_mac_addr.begin());
+            uint8_t remote_peer_id;
+
+            if (Frame::is_beacon(frame)) {
                 esp_now_peer_info_t peer;
                 esp_err_t result = esp_now_get_peer(esp_now_info->src_addr, &peer);
                 if (result == ESP_OK) {
                     ((struct PeerState*)peer.priv)->last_receive_beacon = millis();
                     continue;
                 } else if (result == ESP_ERR_ESPNOW_NOT_FOUND) {
-                    esp_now_send_wrap(BROADCAST_MAC, PAIRING_REQUEST_FRAME, sizeof(PAIRING_REQUEST_FRAME));
+                    std::vector<uint8_t> pairing_request = Frame::pairing_request(remote_mac_addr);
+                    esp_now_send_wrap(BROADCAST_MAC.data(), pairing_request.data(), pairing_request.size());
                     ESP_LOGI(TAG, "Pairing requested. address: " MACSTR, MAC2STR(esp_now_info->src_addr));
                 } else {
                     ESP_LOGE(TAG, "Unknown error. result = %d", result);
                 }
-            } else if (
-                data_len == sizeof(PAIRING_REQUEST_FRAME) && 
-                memcmp(PAIRING_REQUEST_FRAME, receiveData, sizeof(PAIRING_REQUEST_FRAME)) == 0
-            ) {
-                esp_now_send_wrap(BROADCAST_MAC, PAIRING_ACCEPT_FRAME, sizeof(PAIRING_ACCEPT_FRAME));
-            } else if (
-                data_len == sizeof(PAIRING_ACCEPT_FRAME) && 
-                memcmp(PAIRING_ACCEPT_FRAME, receiveData, sizeof(PAIRING_ACCEPT_FRAME)) == 0
-            ) {
+            } else if (Frame::is_pairing_request(frame, mac_addr)) {
+                std::vector<uint8_t> pairing_accept = Frame::pairing_accept(remote_mac_addr, peer_id);
+                esp_now_send_wrap(BROADCAST_MAC.data(), pairing_accept.data(), pairing_accept.size());
+            } else if (Frame::is_pairing_accept(frame, mac_addr, &remote_peer_id)) {
                 esp_now_peer_info_t peer;
                 esp_err_t result = esp_now_get_peer(esp_now_info->src_addr, &peer);
-                if (result == ESP_OK) { return; }
+                if (result == ESP_OK) { continue; }
                 if (result != ESP_ERR_ESPNOW_NOT_FOUND) {
                     ESP_LOGE(TAG, "Unknown error. result = %d", result);
                     continue;
@@ -90,9 +98,15 @@ void pairing_task(void* args) {
                     continue;
                 }
                 memset(peer.priv, 0, sizeof(struct PeerState));
+                ((struct PeerState*)peer.priv)->peer_id = remote_peer_id;
                 ((struct PeerState*)peer.priv)->last_receive_beacon = millis();
                 esp_now_add_peer(&peer);
-                ESP_LOGI(TAG, "Added new peer. address: " MACSTR, MAC2STR(peer.peer_addr));
+                ESP_LOGI(
+                    TAG,
+                    "Added new peer. id: 0x%02X, address: " MACSTR,
+                    ((struct PeerState*)peer.priv)->peer_id,
+                    MAC2STR(peer.peer_addr)
+                );
             }
         }
     }
@@ -129,7 +143,7 @@ void esp_now_receive_task(void* args) {
     ESP_LOGI(TAG, "Receive task initialized.");
     while (true) {
         if (xQueueReceive(receiver_queue, &receive_params, portMAX_DELAY)) {
-            if (memcmp(receive_params.esp_now_info.des_addr, BROADCAST_MAC, ESP_NOW_ETH_ALEN) == 0) {
+            if (memcmp(receive_params.esp_now_info.des_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) {
                 xQueueSend(pairing_queue, &receive_params, portMAX_DELAY);
             }
         }
@@ -143,30 +157,42 @@ void beacon_watch_task(void* args) {
         bool first = true;
         while (esp_now_fetch_peer(first, &peer) == ESP_OK) {
             first = false;
-            if (memcmp(peer.peer_addr, BROADCAST_MAC, ESP_NOW_ETH_ALEN) == 0) { continue; }
-            if ((millis() - ((struct PeerState*)peer.priv)->last_receive_beacon) > (BEACON_INTERVAL + BEACON_DEADLINE)) {
+            if (memcmp(peer.peer_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) { continue; }
+            if ((millis() - ((struct PeerState*)peer.priv)->last_receive_beacon) > (ESP_NOW_BEACON_INTERVAL_MS * 2)) {
                 heap_caps_free(peer.priv);
-                uint8_t tmp[ESP_NOW_ETH_ALEN];
-                memcpy(tmp, peer.peer_addr, ESP_NOW_ETH_ALEN);
+                uint8_t tmp_id = ((struct PeerState*)peer.priv)->peer_id;
+                uint8_t tmp_mac_addr[ESP_NOW_ETH_ALEN];
+                memcpy(tmp_mac_addr, peer.peer_addr, ESP_NOW_ETH_ALEN);
                 esp_err_t result = esp_now_del_peer(peer.peer_addr);
                 if (result == ESP_OK) {
-                    ESP_LOGI(TAG, "Deleted peer. address: " MACSTR, MAC2STR(tmp));
+                    ESP_LOGI(
+                        TAG,
+                        "Deleted peer. id: 0x%02X, address: " MACSTR,
+                        tmp_id,
+                        MAC2STR(tmp_mac_addr)
+                    );
                 } else {
                     ESP_LOGE(TAG, "Unknown error. result = %d", result);
                 }
             } else {
-                ESP_LOGI(TAG, "Peer alive. address = " MACSTR, MAC2STR(peer.peer_addr));
+                ESP_LOGI(
+                    TAG,
+                    "Peer alive. id: 0x%02X, address: " MACSTR,
+                    ((struct PeerState*)peer.priv)->peer_id,
+                    MAC2STR(peer.peer_addr)
+                );
             }
         }
-        vTaskDelay(BEACON_INTERVAL * 3);
+        vTaskDelay(ESP_NOW_BEACON_INTERVAL_MS * 3L);
     }
 }
 
 void beacon_sender_timer_cb(void*) {
-    esp_now_send_wrap(BROADCAST_MAC, BEACON_FRAME, sizeof(BEACON_FRAME));
+    std::vector<uint8_t> beacon = Frame::beacon();
+    esp_now_send_wrap(BROADCAST_MAC.data(), beacon.data(), beacon.size());
 }
 
-void esp_now_task_init() {
+void esp_now_task_init(uint8_t peer_id) {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     WiFi.setSleep(false);
@@ -179,7 +205,7 @@ void esp_now_task_init() {
     }
 
     esp_now_peer_info_t peer = { 0 };
-    memcpy(peer.peer_addr, BROADCAST_MAC, ESP_NOW_ETH_ALEN);
+    memcpy(peer.peer_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN);
     peer.channel = 0;
     peer.ifidx = WIFI_IF_STA;
     peer.encrypt = false;
@@ -192,6 +218,10 @@ void esp_now_task_init() {
 
     esp_now_register_send_cb(esp_now_send_cb);
     esp_now_register_recv_cb(esp_now_recv_cb);
+
+    struct PairingTaskParam pairing_task_param = {
+        .peer_id = peer_id
+    };
 
     xTaskCreate(
         esp_now_send_task,
@@ -213,7 +243,7 @@ void esp_now_task_init() {
         pairing_task,
         TAG " Pairing",
         PAIRING_TASK_STACK_SIZE,
-        NULL,
+        (void*)(&pairing_task_param),
         PAIRING_TASK_PRIORITY,
         &pairing_task_handle
     );
@@ -234,6 +264,6 @@ void esp_now_task_init() {
     esp_timer_create(&timer_args, &timer);
     esp_timer_start_periodic(
         timer,
-        BEACON_INTERVAL * 1000U // micro second.
+        ESP_NOW_BEACON_INTERVAL_MS * 1000L // micro second.
     );
 }

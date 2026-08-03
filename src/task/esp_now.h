@@ -3,7 +3,12 @@
 #include <Arduino.h>
 #include <esp_now.h>
 
+struct PairingTaskParam {
+    uint8_t peer_id;
+};
+
 struct PeerState {
+    uint8_t peer_id;
     uint32_t last_receive_beacon;
 };
 
@@ -20,4 +25,4 @@ struct ReceiveParams {
 };
 
 void esp_now_send_wrap(const uint8_t *peer_addr, const uint8_t *data, size_t len);
-void esp_now_task_init();
+void esp_now_task_init(uint8_t peer_id);
