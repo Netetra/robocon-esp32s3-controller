@@ -179,7 +179,7 @@ void beacon_watch_task(void* args) {
                     ESP_LOGE(TAG, "Unknown error. result = %d", result);
                 }
             } else {
-                ESP_LOGI(
+                ESP_LOGD(
                     TAG,
                     "Peer alive. id: 0x%02X, address: " MACSTR,
                     ((struct PeerState*)peer.priv)->peer_id,
