@@ -81,6 +81,10 @@ void pairing_task(void* args) {
                 std::vector<uint8_t> pairing_accept = Frame::pairing_accept(remote_mac_addr, peer_id);
                 esp_now_send_wrap(BROADCAST_MAC.data(), pairing_accept.data(), pairing_accept.size());
             } else if (Frame::is_pairing_accept(frame, mac_addr, &remote_peer_id)) {
+                if (peer_id == remote_peer_id) {
+                    ESP_LOGE(TAG, "Duplicate ID detected. id: 0x%02X, address: " MACSTR, peer_id, MAC2STR(esp_now_info->src_addr));
+                    continue;
+                }
                 esp_now_peer_info_t peer;
                 esp_err_t result = esp_now_get_peer(esp_now_info->src_addr, &peer);
                 if (result == ESP_OK) { continue; }

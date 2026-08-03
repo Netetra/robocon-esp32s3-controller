@@ -4,8 +4,8 @@
 #include "task/esp_now.h"
 #include "gamepad.h"
 
-const uint8_t LED_PIN = 21;
-const uint8_t PEER_ID = 0x02;
+volatile const uint8_t LED_PIN = 21;
+volatile const uint8_t PEER_ID = 0x02;
 
 // Gamepad gamepad = Gamepad();
 
