@@ -4,14 +4,15 @@
 #include "task/esp_now.h"
 #include "gamepad.h"
 
-volatile const uint8_t LED_PIN = 21;
-volatile const uint8_t PEER_ID = 0x02;
+const uint8_t LED_PIN = 21;
+const uint8_t WIFI_CHANNEL = 14;
+const uint8_t PEER_ID = 0x00;
 
 // Gamepad gamepad = Gamepad();
 
 void setup() {
     // cherryusb_task_init();
-    esp_now_task_init(PEER_ID);
+    esp_now_task_init(WIFI_CHANNEL, PEER_ID);
     led_blink_task_init(LED_PIN);
 }
 

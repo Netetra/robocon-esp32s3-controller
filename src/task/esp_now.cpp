@@ -163,10 +163,10 @@ void beacon_watch_task(void* args) {
             first = false;
             if (memcmp(peer.peer_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) { continue; }
             if ((millis() - ((struct PeerState*)peer.priv)->last_receive_beacon) > (ESP_NOW_BEACON_INTERVAL_MS * 2)) {
-                heap_caps_free(peer.priv);
                 uint8_t tmp_id = ((struct PeerState*)peer.priv)->peer_id;
                 uint8_t tmp_mac_addr[ESP_NOW_ETH_ALEN];
                 memcpy(tmp_mac_addr, peer.peer_addr, ESP_NOW_ETH_ALEN);
+                heap_caps_free(peer.priv);
                 esp_err_t result = esp_now_del_peer(peer.peer_addr);
                 if (result == ESP_OK) {
                     ESP_LOGI(
@@ -196,17 +196,16 @@ void beacon_sender_timer_cb(void*) {
     esp_now_send_wrap(BROADCAST_MAC.data(), beacon.data(), beacon.size());
 }
 
-void esp_now_task_init(uint8_t peer_id) {
+void esp_now_task_init(uint8_t channel, uint8_t peer_id) {
+    esp_err_t result;
+    WiFi.useStaticBuffers(true);
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     WiFi.setSleep(false);
-    esp_wifi_set_promiscuous(true);
-    esp_wifi_set_channel(14, WIFI_SECOND_CHAN_NONE);
-    esp_wifi_set_promiscuous(false);
-    if(esp_now_init() != ESP_OK){
-        ESP_LOGE(TAG, "Failed to initialize.");
-        while (true);
-    }
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+    ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
+    ESP_ERROR_CHECK(esp_now_init());
 
     esp_now_peer_info_t peer = { 0 };
     memcpy(peer.peer_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN);
@@ -220,21 +219,12 @@ void esp_now_task_init(uint8_t peer_id) {
     pairing_queue = xQueueCreate(5, sizeof(struct ReceiveParams));
     send_done = xSemaphoreCreateBinary();
 
-    esp_now_register_send_cb(esp_now_send_cb);
-    esp_now_register_recv_cb(esp_now_recv_cb);
+    ESP_ERROR_CHECK(esp_now_register_send_cb(esp_now_send_cb));
+    ESP_ERROR_CHECK(esp_now_register_recv_cb(esp_now_recv_cb));
 
-    struct PairingTaskParam pairing_task_param = {
-        .peer_id = peer_id
-    };
+    void* pairing_task_param = heap_caps_malloc(sizeof(struct PairingTaskParam), MALLOC_CAP_8BIT);
+    ((struct PairingTaskParam*)pairing_task_param)->peer_id = peer_id;
 
-    xTaskCreate(
-        esp_now_send_task,
-        TAG " Sender",
-        ESP_NOW_SEND_TASK_STACK_SIZE,
-        NULL,
-        ESP_NOW_SEND_TASK_PRIORITY,
-        &esp_now_send_task_handle
-    );
     xTaskCreate(
         esp_now_receive_task,
         TAG " Receiver",
@@ -244,12 +234,12 @@ void esp_now_task_init(uint8_t peer_id) {
         &esp_now_receive_task_handle
     );
     xTaskCreate(
-        pairing_task,
-        TAG " Pairing",
-        PAIRING_TASK_STACK_SIZE,
-        (void*)(&pairing_task_param),
-        PAIRING_TASK_PRIORITY,
-        &pairing_task_handle
+        esp_now_send_task,
+        TAG " Sender",
+        ESP_NOW_SEND_TASK_STACK_SIZE,
+        NULL,
+        ESP_NOW_SEND_TASK_PRIORITY,
+        &esp_now_send_task_handle
     );
     xTaskCreate(
         beacon_watch_task,
@@ -259,15 +249,23 @@ void esp_now_task_init(uint8_t peer_id) {
         BEACON_WATCH_TASK_PRIORITY,
         &beacon_watch_task_handle
     );
+    xTaskCreate(
+        pairing_task,
+        TAG " Pairing",
+        PAIRING_TASK_STACK_SIZE,
+        pairing_task_param,
+        PAIRING_TASK_PRIORITY,
+        &pairing_task_handle
+    );
 
     const esp_timer_create_args_t timer_args = {
         .callback = &beacon_sender_timer_cb,
         .name = "Beacon sender"
     };
     esp_timer_handle_t timer;
-    esp_timer_create(&timer_args, &timer);
-    esp_timer_start_periodic(
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(
         timer,
         ESP_NOW_BEACON_INTERVAL_MS * 1000L // micro second.
-    );
+    ));
 }

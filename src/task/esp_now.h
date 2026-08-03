@@ -25,4 +25,4 @@ struct ReceiveParams {
 };
 
 void esp_now_send_wrap(const uint8_t *peer_addr, const uint8_t *data, size_t len);
-void esp_now_task_init(uint8_t peer_id);
+void esp_now_task_init(uint8_t channel, uint8_t peer_id);
