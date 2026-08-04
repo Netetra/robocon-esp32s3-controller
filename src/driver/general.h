@@ -38,7 +38,7 @@ union Buttons {
     } bits;
 };
 
-struct GamepadData {
+struct __attribute__((packed)) GamepadData {
     struct JoyStick joystick_left;
     struct JoyStick joystick_right;
     uint8_t trigger_left;

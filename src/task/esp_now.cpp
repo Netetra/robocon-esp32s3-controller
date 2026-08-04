@@ -18,17 +18,23 @@ const uint32_t BEACON_WATCH_TASK_STACK_SIZE = 4096;
 const uint8_t BEACON_WATCH_TASK_PRIORITY = 15;
 const uint32_t PAIRING_TASK_STACK_SIZE = 4096;
 const uint8_t PAIRING_TASK_PRIORITY = 15;
+const uint32_t ESP_NOW_RECEIVE_CB_CALL_TASK_STACK_SIZE = 4096;
+const uint8_t ESP_NOW_RECEIVE_CB_CALL_TASK_PRIORITY = 15;
 
 TaskHandle_t esp_now_send_task_handle;
 TaskHandle_t esp_now_receive_task_handle;
 TaskHandle_t beacon_watch_task_handle;
 TaskHandle_t pairing_task_handle;
+TaskHandle_t esp_now_receive_cb_call_task_handle;
 
 QueueHandle_t sender_queue;
 QueueHandle_t receiver_queue;
 QueueHandle_t pairing_queue;
+QueueHandle_t receive_cb_call_queue;
 
 SemaphoreHandle_t send_done;
+
+__attribute__((weak)) void esp_now_recv_cb(struct ReceiveParams* receive_params) {}
 
 void esp_now_send_wrap(const uint8_t *peer_addr, const uint8_t *data, size_t len) {
     struct SendParams send_params = { 0 };
@@ -36,6 +42,35 @@ void esp_now_send_wrap(const uint8_t *peer_addr, const uint8_t *data, size_t len
     memcpy(send_params.data, data, len);
     send_params.len = len;
     xQueueSend(sender_queue, &send_params, portMAX_DELAY);
+}
+
+esp_err_t esp_now_get_peer(uint8_t peer_id, esp_now_peer_info_t *peer) {
+    bool first = true;
+    while (esp_now_fetch_peer(first, peer) == ESP_OK) {
+        first = false;
+        if (memcmp(peer->peer_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) { continue; }
+        if (((struct PeerState*)peer->priv)->peer_id == peer_id) { return ESP_OK; }
+    }
+    return ESP_ERR_ESPNOW_NOT_FOUND;
+}
+
+esp_err_t esp_now_send_messages(uint8_t peer_id, std::vector<struct Message> messages) {
+    esp_now_peer_info_t peer;
+    std::vector<uint8_t> frame = Frame::message(messages);
+    esp_err_t result;
+    if (peer_id == 0xFF) {
+        bool first = true;
+        while (esp_now_fetch_peer(first, &peer) == ESP_OK) {
+            first = false;
+            if (memcmp(peer.peer_addr, BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) { continue; }
+            esp_now_send_wrap(peer.peer_addr, frame.data(), frame.size());
+        }
+    } else {
+        esp_err_t result = esp_now_get_peer(peer_id, &peer);
+        if (result != ESP_OK) { return result; }
+        esp_now_send_wrap(peer.peer_addr, frame.data(), frame.size());
+    }
+    return ESP_OK;
 }
 
 void esp_now_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status) {
@@ -61,8 +96,6 @@ void pairing_task(void* args) {
                 (uint8_t*)receive_params.receiveData,
                 (uint8_t*)receive_params.receiveData + data_len
             );
-            // mac_addr_t remote_mac_addr;
-            // std::copy(src_addr, src_addr + sizeof(mac_addr_t), remote_mac_addr.begin());
             uint8_t remote_peer_id;
 
             if (Frame::is_beacon(frame)) {
@@ -112,12 +145,14 @@ void pairing_task(void* args) {
                     ((struct PeerState*)peer.priv)->peer_id,
                     MAC2STR(peer.peer_addr)
                 );
+            } else {
+                xQueueSend(receive_cb_call_queue, &receive_params, portMAX_DELAY);
             }
         }
     }
 }
 
-void esp_now_recv_cb(const esp_now_recv_info_t *esp_now_info, const uint8_t *receiveData, int data_len) {
+void __esp_now_recv_cb(const esp_now_recv_info_t *esp_now_info, const uint8_t *receiveData, int data_len) {
     struct ReceiveParams receive_params = { 0 };
     std::copy(
         esp_now_info->src_addr,
@@ -152,6 +187,16 @@ void esp_now_send_task(void* args) {
     }
 }
 
+void esp_now_receive_cb_call_task(void* args) {
+    struct ReceiveParams receive_params = { 0 };
+    ESP_LOGI(TAG, "Receive callback call task initialized.");
+    while (true) {
+        if (xQueueReceive(receive_cb_call_queue, &receive_params, portMAX_DELAY)) {
+            esp_now_recv_cb(&receive_params);
+        }
+    }
+}
+
 void esp_now_receive_task(void* args) {
     struct ReceiveParams receive_params = { 0 };
     ESP_LOGI(TAG, "Receive task initialized.");
@@ -159,6 +204,8 @@ void esp_now_receive_task(void* args) {
         if (xQueueReceive(receiver_queue, &receive_params, portMAX_DELAY)) {
             if (memcmp(receive_params.des_addr.data(), BROADCAST_MAC.data(), ESP_NOW_ETH_ALEN) == 0) {
                 xQueueSend(pairing_queue, &receive_params, portMAX_DELAY);
+            } else {
+                xQueueSend(receive_cb_call_queue, &receive_params, portMAX_DELAY);
             }
         }
     }
@@ -227,10 +274,11 @@ void esp_now_task_init(uint8_t channel, uint8_t peer_id) {
     sender_queue = xQueueCreate(5, sizeof(struct SendParams));
     receiver_queue = xQueueCreate(5, sizeof(struct ReceiveParams));
     pairing_queue = xQueueCreate(5, sizeof(struct ReceiveParams));
+    receive_cb_call_queue = xQueueCreate(5, sizeof(struct ReceiveParams));
     send_done = xSemaphoreCreateBinary();
 
     ESP_ERROR_CHECK(esp_now_register_send_cb(esp_now_send_cb));
-    ESP_ERROR_CHECK(esp_now_register_recv_cb(esp_now_recv_cb));
+    ESP_ERROR_CHECK(esp_now_register_recv_cb(__esp_now_recv_cb));
 
     void* pairing_task_param = heap_caps_malloc(sizeof(struct PairingTaskParam), MALLOC_CAP_8BIT);
     ((struct PairingTaskParam*)pairing_task_param)->peer_id = peer_id;
@@ -242,6 +290,14 @@ void esp_now_task_init(uint8_t channel, uint8_t peer_id) {
         NULL,
         ESP_NOW_RECEIVE_TASK_PRIORITY,
         &esp_now_receive_task_handle
+    );
+    xTaskCreate(
+        esp_now_receive_cb_call_task,
+        TAG " Receive cb call",
+        ESP_NOW_RECEIVE_CB_CALL_TASK_STACK_SIZE,
+        NULL,
+        ESP_NOW_RECEIVE_CB_CALL_TASK_PRIORITY,
+        &esp_now_receive_cb_call_task_handle
     );
     xTaskCreate(
         esp_now_send_task,

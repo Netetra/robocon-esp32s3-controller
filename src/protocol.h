@@ -34,6 +34,7 @@ class Frame {
         static bool is_beacon(std::vector<uint8_t>& frame);
         static bool is_pairing_request(std::vector<uint8_t>& frame, mac_addr_t& mac_addr);
         static bool is_pairing_accept(std::vector<uint8_t>& frame, mac_addr_t& mac_addr, uint8_t *peer_id);
+        static bool parse_message(std::vector<uint8_t>& frame, std::vector<struct Message>& messages);
     private:
         static std::vector<uint8_t> header(uint8_t frame_type);
         static bool is_start_sof(std::vector<uint8_t>& frame);

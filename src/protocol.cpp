@@ -21,7 +21,7 @@ std::vector<uint8_t> Frame::pairing_accept(mac_addr_t& mac_addr, uint8_t peer_id
 }
 
 std::vector<uint8_t> Frame::message(std::vector<struct Message>& messages) {
-    std::vector<uint8_t> frame = Frame::header(static_cast<uint8_t>(FrameCode::PairingAccept));
+    std::vector<uint8_t> frame = Frame::header(static_cast<uint8_t>(FrameCode::Message));
     for (struct Message message: messages) {
         frame.push_back(message.type);
         frame.push_back(message.data.size());
@@ -45,6 +45,7 @@ bool Frame::is_beacon(std::vector<uint8_t>& frame) {
 bool Frame::is_pairing_request(std::vector<uint8_t>& frame, mac_addr_t& mac_addr) {
     if (frame.size() != (SOF.size() + 1 + sizeof(mac_addr_t))) { return false; }
     if (!Frame::is_start_sof(frame)) { return false; }
+    if (static_cast<uint8_t>(FrameCode::PairingRequest) != frame[SOF.size()]) { return false; }
     bool is_match_mac_addr = std::equal(
         frame.begin() + SOF.size() + 1,
         frame.begin() + SOF.size() + 1 + sizeof(mac_addr_t),
@@ -57,6 +58,7 @@ bool Frame::is_pairing_request(std::vector<uint8_t>& frame, mac_addr_t& mac_addr
 bool Frame::is_pairing_accept(std::vector<uint8_t>& frame, mac_addr_t& mac_addr, uint8_t *peer_id) {
     if (frame.size() != (SOF.size() + 1 + sizeof(mac_addr_t) + 1)) { return false; }
     if (!Frame::is_start_sof(frame)) { return false; }
+    if (static_cast<uint8_t>(FrameCode::PairingAccept) != frame[SOF.size()]) { return false; }
     bool is_match_mac_addr = std::equal(
         frame.begin() + SOF.size() + 1,
         frame.begin() + SOF.size() + 1 + sizeof(mac_addr_t),
@@ -64,6 +66,30 @@ bool Frame::is_pairing_accept(std::vector<uint8_t>& frame, mac_addr_t& mac_addr,
     );
     if (!is_match_mac_addr) { return false; }
     *peer_id = frame[SOF.size() + 1 + sizeof(mac_addr_t)];
+    return true;
+}
+
+bool Frame::parse_message(std::vector<uint8_t>& frame, std::vector<struct Message>& messages) {
+    if (!Frame::is_start_sof(frame)) { return false; }
+    if (static_cast<uint8_t>(FrameCode::Message) != frame[SOF.size()]) { return false; }
+    if (frame.size() == (SOF.size() + 1)) { return true; } // messages count 0
+    size_t pos = SOF.size() + 1;
+    while (pos < frame.size()) {
+        if (pos >= frame.size()) { return false; }
+        uint8_t type = frame[pos++];
+        if (pos >= frame.size()) { return false; }
+        uint8_t len = frame[pos++];
+        if (pos + len > frame.size()) { return false; }
+
+        struct Message message;
+        message.type = type;
+        message.data.assign(
+            frame.begin() + pos,
+            frame.begin() + pos + len
+        );
+        messages.push_back(std::move(message));
+        pos += len;
+    }
     return true;
 }
 
@@ -75,5 +101,6 @@ std::vector<uint8_t> Frame::header(uint8_t frame_type) {
 }
 
 bool Frame::is_start_sof(std::vector<uint8_t>& frame) {
+    if (frame.size() < (SOF.size() + 1)) { return false; }
     return std::equal(SOF.begin(), SOF.end(), frame.begin());
 }

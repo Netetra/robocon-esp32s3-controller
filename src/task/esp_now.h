@@ -28,3 +28,5 @@ struct ReceiveParams {
 
 void esp_now_send_wrap(const uint8_t *peer_addr, const uint8_t *data, size_t len);
 void esp_now_task_init(uint8_t channel, uint8_t peer_id);
+esp_err_t esp_now_get_peer(uint8_t peer_id, esp_now_peer_info_t *peer);
+esp_err_t esp_now_send_messages(uint8_t peer_id, std::vector<struct Message> messages);

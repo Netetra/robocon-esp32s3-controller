@@ -10,7 +10,6 @@
 extern volatile uint16_t led_blink_interval;
 extern uint32_t g_devinuse;
 extern struct usbh_gamepad g_gamepad_class[CONFIG_GAMEPAD_MAX];
-struct GamepadData gamepad_data;
 
 void usbh_gamepad_callback(void *arg, int nbytes) {
     struct usbh_gamepad *gamepad_class = (struct usbh_gamepad*)arg;
@@ -28,7 +27,7 @@ void usbh_gamepad_callback(void *arg, int nbytes) {
     gamepad_class->nbytes = nbytes;
 }
 
-struct GamepadData* gamepad_poll() {
+bool gamepad_poll(struct GamepadData *gamepad_data) {
     for (uint8_t i = 0; i < CONFIG_GAMEPAD_MAX; i++) {
         struct usbh_gamepad* gamepad_class = &(g_gamepad_class[i]);
         uint8_t devno = gamepad_class->minor;
@@ -47,7 +46,7 @@ struct GamepadData* gamepad_poll() {
         int result = usbh_submit_urb(&gamepad_class->ep_in_urb);
         if (result != 0) {
             USB_LOG_WRN("Failed to submit URB.\r\n");
-            return NULL;
+            return false;
         }
         gamepad_class->is_receive = false;
         gamepad_class->is_active = true;
@@ -64,14 +63,14 @@ struct GamepadData* gamepad_poll() {
 
         switch (gamepad_class->gamepad_type) {
             case GamepadType::PS4:
-                ps4_report_parser(gamepad_class->buffer, &gamepad_data);
+                ps4_report_parser(gamepad_class->buffer, gamepad_data);
                 break;
             default:
                 continue;
         }
-        return &gamepad_data;
+        return true;
     }
-    return NULL;
+    return false;
 }
 
 extern "C" void usbh_gamepad_run(struct usbh_gamepad *gamepad_class) {
@@ -145,15 +144,18 @@ void print_gamepad_state(struct GamepadData *gamepad_data) {
     printf("\r\033[6A");
 }
 
+void gamepad_data_set_neutral(struct GamepadData *gamepad_data) {
+    gamepad_data->joystick_left = { 0, 0 };
+    gamepad_data->joystick_left = { 0, 0 };
+    gamepad_data->trigger_left = 0;
+    gamepad_data->trigger_right = 0;
+    gamepad_data->buttons.raw = 0;
+    gamepad_data->dpad = Dpad::Neutral;
+}
+
 Gamepad::Gamepad() {
-    struct GamepadData init_gamepad = {
-        .joystick_left = { 0, 0 },
-        .joystick_right = { 0, 0 },
-        .trigger_left = 0,
-        .trigger_right = 0,
-        .buttons = { .raw = 0 },
-        .dpad = Dpad::Neutral
-    };
+    struct GamepadData init_gamepad;
+    gamepad_data_set_neutral(&init_gamepad);
     memcpy(&this->current_data, &init_gamepad, sizeof(struct GamepadData));
 }
 
