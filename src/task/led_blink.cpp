@@ -15,7 +15,7 @@ void led_blink_task(void* args) {
     bool state = false;
     ESP_LOGI(TAG, "LED Blink task initialized. using GPIO%d", led_pin);
     while (true) {
-        digitalWrite(led_pin, state);
+        gpio_set_level(static_cast<gpio_num_t>(led_pin), state);
         state = !state;
         vTaskDelay(led_blink_interval);
     }
@@ -24,6 +24,7 @@ void led_blink_task(void* args) {
 void led_blink_task_init(const uint8_t _led_pin) {
     uint8_t* led_pin = new uint8_t(_led_pin);
     pinMode(*led_pin, OUTPUT);
+    gpio_set_direction(static_cast<gpio_num_t>(*led_pin), GPIO_MODE_OUTPUT);
     xTaskCreate(
         led_blink_task,
         TAG,

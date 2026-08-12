@@ -38,3 +38,4 @@ class Gamepad {
 void gamepad_data_set_neutral(struct GamepadData *gamepad_data);
 bool gamepad_poll(struct GamepadData *gamepad_data);
 void cherryusb_task_init();
+void print_gamepad_state(struct GamepadData *gamepad_data);

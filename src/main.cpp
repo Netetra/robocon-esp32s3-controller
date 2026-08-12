@@ -1,20 +1,59 @@
 #include <Arduino.h>
 #include "task/esp_now.h"
 #include "task/led_blink.h"
+#include "gamepad.h"
 
 #define TAG "App"
 
 const uint8_t LED_PIN = 21;
 const uint8_t WIFI_CHANNEL = 14;
 const peer_id_t PEER_ID = 0x00;
+const uint8_t GAMEPAD_TIMEOUT_MS = 250;
+
+struct GamepadData gamepad_data;
+Gamepad gamepad = Gamepad();
+uint32_t last_receive_gamepad;
+
+enum class MessageType: uint8_t {
+    Gamepad = 0
+};
+
+void esp_now_recv_cb(const peer_id_t peer_id, const std::vector<struct Message>& messages) {
+    for (auto message: messages) {
+        if (message.type == static_cast<uint8_t>(MessageType::Gamepad)) {
+            print_gamepad_state((struct GamepadData*)(message.data.data()));
+        }
+    }
+}
+
+void update_gamepad_data() {
+    if (gamepad_poll(&gamepad_data)) {
+        last_receive_gamepad = millis();
+        gamepad.update(&gamepad_data);
+    }
+    if (millis() - last_receive_gamepad > GAMEPAD_TIMEOUT_MS) {
+        gamepad_data_set_neutral(&gamepad_data);
+        ESP_LOGW(TAG, "Gamepad timeout.");
+    }
+}
 
 void setup() {
+    // cherryusb_task_init();
     esp_now_task_init(WIFI_CHANNEL, PEER_ID);
     led_blink_task_init(LED_PIN);
+    // last_receive_gamepad = millis();
 }
 
 void loop() {
-    auto frame = Frame::beacon();
-    esp_now_send(BROADCAST_MAC.data(), frame.data(), frame.size());
-    vTaskDelay(500);
+    /*
+    update_gamepad_data();
+    std::vector<struct Message> messages;
+    struct Message gamepad_message = {
+        .type = static_cast<uint8_t>(MessageType::Gamepad),
+        .data = std::vector((uint8_t*)&gamepad_data, (uint8_t*)&gamepad_data + sizeof(struct GamepadData))
+    };
+    messages.push_back(std::move(gamepad_message));
+    esp_now_send_messages(BROADCAST_ID, messages);
+    */
+    vTaskDelay(50);
 }

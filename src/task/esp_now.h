@@ -8,8 +8,13 @@ using mac_addr_t = std::array<uint8_t, ESP_NOW_ETH_ALEN>;
 
 const mac_addr_t BROADCAST_MAC = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 const mac_addr_t PEER_BASE_MAC = { 0x02,  'n',  'n',  'c',  't', 0x00 }; // [5]: peer_id
+const peer_id_t BROADCAST_ID = 0xFF;
 const uint32_t ESP_NOW_BEACON_INTERVAL_MS = 500;
 const std::array<uint8_t, 2> SOF = { 0x55, 0xAA };
+
+struct PeerState {
+    uint32_t last_receive_beacon;
+};
 
 struct SendInfo {
     mac_addr_t peer_addr;
@@ -48,7 +53,6 @@ class Frame {
         static std::vector<uint8_t> pairing_request(const mac_addr_t& mac_addr);
         static std::vector<uint8_t> pairing_accept(const mac_addr_t& mac_addr);
         static std::vector<uint8_t> message(const std::vector<struct Message>& messages);
-        static std::vector<uint8_t> custom(uint8_t frame_type, const std::vector<uint8_t>& data);
         static bool is_beacon(const std::vector<uint8_t>& frame);
         static bool is_pairing_request(const std::vector<uint8_t>& frame, const mac_addr_t& mac_addr);
         static bool is_pairing_accept(const std::vector<uint8_t>& frame, const mac_addr_t& mac_addr);
@@ -57,3 +61,6 @@ class Frame {
         static std::vector<uint8_t> header(uint8_t frame_type);
         static bool is_start_sof(const std::vector<uint8_t>& frame);
 };
+
+esp_err_t esp_now_send_messages(const peer_id_t peer_id, const std::vector<struct Message>& messages);
+void print_esp_now_messages(const peer_id_t peer_id, const std::vector<struct Message>& messages);
