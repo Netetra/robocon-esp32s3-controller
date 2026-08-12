@@ -1,15 +1,19 @@
 #include <freertos/FreeRTOS.h>
 #include <Arduino.h>
-#include "task/led_blink.h"
 #include "driver/general.h"
 #include "driver/ps4.h"
 #include "gamepad.h"
 
 #define TAG "Gamepad"
 
+const uint32_t STACK_SIZE = 2048;
+const uint8_t PRIORITY = 0;
+
 extern volatile uint16_t led_blink_interval;
 extern uint32_t g_devinuse;
 extern struct usbh_gamepad g_gamepad_class[CONFIG_GAMEPAD_MAX];
+volatile uint16_t led_blink_interval = static_cast<uint16_t>(LedBlinkInterval::DISCONNECTED);
+TaskHandle_t led_blink_task_handle;
 
 void print_gamepad_state(struct GamepadData *gamepad_data) {
     printf(
@@ -49,6 +53,31 @@ void print_gamepad_state(struct GamepadData *gamepad_data) {
         gamepad_data->dpad == Dpad::RightUp || gamepad_data->dpad == Dpad::Right || gamepad_data->dpad == Dpad::RightDown
     );
     printf("\r\033[6A");
+}
+
+void led_blink_task(void* args) {
+    const uint8_t led_pin = *((uint8_t*)args);
+    bool state = false;
+    ESP_LOGI(TAG, "LED Blink task initialized. using GPIO%d", led_pin);
+    while (true) {
+        gpio_set_level(static_cast<gpio_num_t>(led_pin), state);
+        state = !state;
+        vTaskDelay(led_blink_interval);
+    }
+}
+
+void led_blink_task_init(const uint8_t _led_pin) {
+    uint8_t* led_pin = new uint8_t(_led_pin);
+    pinMode(*led_pin, OUTPUT);
+    gpio_set_direction(static_cast<gpio_num_t>(*led_pin), GPIO_MODE_OUTPUT);
+    xTaskCreate(
+        led_blink_task,
+        TAG,
+        STACK_SIZE,
+        (void*)led_pin,
+        PRIORITY,
+        &led_blink_task_handle
+    );
 }
 
 void usbh_gamepad_callback(void *arg, int nbytes) {
@@ -139,9 +168,10 @@ extern "C" void usbh_gamepad_stop(struct usbh_gamepad *gamepad_class) {
     led_blink_interval = static_cast<uint16_t>(LedBlinkInterval::DISCONNECTED);
 }
 
-void cherryusb_task_init() {
+void cherryusb_task_init(uint8_t led_pin) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     usbh_initialize(0, ESP_USBH_BASE);
+    led_blink_task_init(led_pin);
 }
 
 void gamepad_data_set_neutral(struct GamepadData *gamepad_data) {

@@ -1,0 +1,3 @@
+[submodule "lib/peer-link"]
+	path = lib/peer-link
+	url = https://github.com/netetra/peer-link

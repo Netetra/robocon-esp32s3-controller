@@ -37,5 +37,10 @@ class Gamepad {
 
 void gamepad_data_set_neutral(struct GamepadData *gamepad_data);
 bool gamepad_poll(struct GamepadData *gamepad_data);
-void cherryusb_task_init();
+void cherryusb_task_init(uint8_t led_pin);
 void print_gamepad_state(struct GamepadData *gamepad_data);
+
+enum class LedBlinkInterval { // milli second.
+    DISCONNECTED = 100,
+    CONNECTED = 1000,
+};
