@@ -19,11 +19,13 @@ enum class MessageType: uint8_t {
 };
 
 void esp_now_recv_cb(const peer_id_t peer_id, const std::vector<struct Message>& messages) {
+    /*
     for (auto message: messages) {
         if (message.type == static_cast<uint8_t>(MessageType::Gamepad)) {
             print_gamepad_state((struct GamepadData*)(message.data.data()));
         }
     }
+    */
 }
 
 void update_gamepad_data() {
@@ -38,14 +40,13 @@ void update_gamepad_data() {
 }
 
 void setup() {
-    // cherryusb_task_init();
+    cherryusb_task_init();
     esp_now_task_init(WIFI_CHANNEL, PEER_ID);
     led_blink_task_init(LED_PIN);
-    // last_receive_gamepad = millis();
+    last_receive_gamepad = millis();
 }
 
 void loop() {
-    /*
     update_gamepad_data();
     std::vector<struct Message> messages;
     struct Message gamepad_message = {
@@ -54,6 +55,5 @@ void loop() {
     };
     messages.push_back(std::move(gamepad_message));
     esp_now_send_messages(BROADCAST_ID, messages);
-    */
     vTaskDelay(50);
 }
