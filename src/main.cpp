@@ -21,13 +21,13 @@ void peer_link_recv_cb(const peer_id_t peer_id, const std::vector<struct Message
 
 void update_gamepad_data() {
     if (gamepad_poll(&gamepad_data)) {
-        last_receive_gamepad = millis();
         gamepad.update(&gamepad_data);
     }
     if (millis() - last_receive_gamepad > GAMEPAD_TIMEOUT_MS) {
-        gamepad_data_set_neutral(&gamepad_data);
+        gamepad.set_neutral();
         ESP_LOGW(TAG, "Gamepad timeout.");
     }
+    last_receive_gamepad = millis();
 }
 
 void setup() {

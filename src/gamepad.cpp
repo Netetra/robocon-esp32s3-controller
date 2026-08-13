@@ -174,19 +174,8 @@ void cherryusb_task_init(uint8_t led_pin) {
     led_blink_task_init(led_pin);
 }
 
-void gamepad_data_set_neutral(struct GamepadData *gamepad_data) {
-    gamepad_data->joystick_left = { 0, 0 };
-    gamepad_data->joystick_left = { 0, 0 };
-    gamepad_data->trigger_left = 0;
-    gamepad_data->trigger_right = 0;
-    gamepad_data->buttons.raw = 0;
-    gamepad_data->dpad = Dpad::Neutral;
-}
-
 Gamepad::Gamepad() {
-    struct GamepadData init_gamepad;
-    gamepad_data_set_neutral(&init_gamepad);
-    memcpy(&this->current_data, &init_gamepad, sizeof(struct GamepadData));
+    this->set_neutral();
 }
 
 void Gamepad::update(struct GamepadData *gamepad_data) {
@@ -292,4 +281,13 @@ bool Gamepad::trigger_left() {
 
 bool Gamepad::trigger_right() {
     return this->current_data.buttons.bits.trigger_right == 1;
+}
+
+void Gamepad::set_neutral() {
+    this->current_data.joystick_left = { 0, 0 };
+    this->current_data.joystick_left = { 0, 0 };
+    this->current_data.trigger_left = 0;
+    this->current_data.trigger_right = 0;
+    this->current_data.buttons.raw = 0;
+    this->current_data.dpad = Dpad::Neutral;
 }
