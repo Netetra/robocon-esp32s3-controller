@@ -2,10 +2,14 @@
 
 #include "usbh_core.h"
 #include "general.h"
+#include "ps4.h"
 
 #define DEV_FORMAT "/dev/dualshock%d"
 
 const uint8_t TARGET_INTERFACE = 3;
+
+extern uint32_t g_devinuse;
+extern struct usbh_gamepad g_gamepad_class[CONFIG_GAMEPAD_MAX];
 
 static int usbh_ps4_connect(struct usbh_hubport *hport, uint8_t intf);
 static int usbh_ps4_disconnect(struct usbh_hubport *hport, uint8_t intf);
@@ -74,7 +78,7 @@ int8_t fix_joystick_range(uint8_t value) {
     return tmp - 128;
 }
 
-void ps4_report_parser(uint8_t *buffer, struct GamepadData* gamepad) {
+void ps4_report_parser(uint8_t *buffer, struct GamepadData* gamepad, struct PS4Data * ps4) {
     gamepad->joystick_left.x = fix_joystick_range(buffer[1]);
     gamepad->joystick_left.y = fix_joystick_range(buffer[2]);
     gamepad->joystick_right.x =fix_joystick_range(buffer[3]);
@@ -97,4 +101,30 @@ void ps4_report_parser(uint8_t *buffer, struct GamepadData* gamepad) {
 
     gamepad->trigger_left = buffer[8];
     gamepad->trigger_right = buffer[9];
+}
+
+bool ps4_set_state(struct PS4OutReport *state) {
+    for (uint8_t i = 0; i < CONFIG_GAMEPAD_MAX; i++) {
+        struct usbh_gamepad* gamepad_class = &(g_gamepad_class[i]);
+        uint8_t devno = gamepad_class->minor;
+        if ((g_devinuse & (1U << devno)) == 0) { continue; }
+        if (gamepad_class->is_active || !gamepad_class->is_connected) { continue; }
+        memcpy(gamepad_class->buffer, state, sizeof(struct PS4OutReport));
+        usbh_int_urb_fill(
+            &gamepad_class->ep_out_urb,
+            gamepad_class->hport,
+            gamepad_class->ep_out,
+            gamepad_class->buffer,
+            sizeof(struct PS4OutReport),
+            0,
+            NULL,
+            NULL
+        );
+        int result = usbh_submit_urb(&gamepad_class->ep_out_urb);
+        if (result != 0) {
+            USB_LOG_WRN("Failed to submit URB.\r\n");
+            return false;
+        }
+    }
+    return true;
 }

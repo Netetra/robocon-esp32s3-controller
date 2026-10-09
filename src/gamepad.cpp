@@ -96,7 +96,7 @@ void usbh_gamepad_callback(void *arg, int nbytes) {
     gamepad_class->nbytes = nbytes;
 }
 
-bool gamepad_poll(struct GamepadData *gamepad_data) {
+bool gamepad_poll(enum GamepadType *gamepad_type, void* buffer) {
     for (uint8_t i = 0; i < CONFIG_GAMEPAD_MAX; i++) {
         struct usbh_gamepad* gamepad_class = &(g_gamepad_class[i]);
         uint8_t devno = gamepad_class->minor;
@@ -130,13 +130,8 @@ bool gamepad_poll(struct GamepadData *gamepad_data) {
         printf("\r\n");
         #endif
 
-        switch (gamepad_class->gamepad_type) {
-            case GamepadType::PS4:
-                ps4_report_parser(gamepad_class->buffer, gamepad_data);
-                break;
-            default:
-                continue;
-        }
+        *gamepad_type = gamepad_class->gamepad_type;
+        memcpy(buffer, gamepad_class->buffer, gamepad_class->nbytes);
         return true;
     }
     return false;
